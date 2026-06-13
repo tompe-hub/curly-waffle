@@ -1,0 +1,17 @@
+{
+  "_comment": "Curated RSS/Atom feeds. region is 'china' or 'global'. Add or remove entries freely; the fetcher reads this file at runtime. 'tags' (optional) force-tags every item from a topical feed.",
+  "feeds": [
+    { "name": "arXiv cs.AI",            "url": "http://export.arxiv.org/rss/cs.AI",                 "region": "global", "tags": ["ai"] },
+    { "name": "arXiv quant-ph",         "url": "http://export.arxiv.org/rss/quant-ph",              "region": "global", "tags": ["quantum"] },
+    { "name": "MIT Technology Review",  "url": "https://www.technologyreview.com/feed/",            "region": "global", "tags": [] },
+    { "name": "Ars Technica",           "url": "https://feeds.arstechnica.com/arstechnica/index",   "region": "global", "tags": [] },
+    { "name": "The Verge",              "url": "https://www.theverge.com/rss/index.xml",            "region": "global", "tags": [] },
+    { "name": "VentureBeat AI",         "url": "https://venturebeat.com/category/ai/feed/",         "region": "global", "tags": ["ai"] },
+    { "name": "Hacker News (front)",    "url": "https://hnrss.org/frontpage",                       "region": "global", "tags": [] },
+    { "name": "The Quantum Insider",    "url": "https://thequantuminsider.com/feed/",               "region": "global", "tags": ["quantum"] },
+    { "name": "TechNode",               "url": "https://technode.com/feed/",                        "region": "china",  "tags": [] },
+    { "name": "Pandaily",               "url": "https://pandaily.com/feed/",                        "region": "china",  "tags": [] },
+    { "name": "SCMP Tech",              "url": "https://www.scmp.com/rss/36/feed",                  "region": "china",  "tags": [] },
+    { "name": "Sixth Tone",             "url": "https://www.sixthtone.com/rss",                     "region": "china",  "tags": [] }
+  ]
+}

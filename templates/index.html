@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tech Tracker — AI · Quantum · China</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <h1>Tech Tracker</h1>
+    <span class="tagline">AI &middot; Quantum &middot; China &mdash; daily</span>
+  </div>
+  <form method="post" action="{{ url_for('refresh', tag=active_tag, region=active_region, days=days) }}">
+    <button type="submit" class="refresh">↻ Refresh feeds</button>
+  </form>
+</header>
+
+<section class="stats">
+  <div class="stat"><span class="num">{{ counts.total }}</span><span class="lbl">Total</span></div>
+  <div class="stat ai"><span class="num">{{ counts.ai }}</span><span class="lbl">AI</span></div>
+  <div class="stat quantum"><span class="num">{{ counts.quantum }}</span><span class="lbl">Quantum</span></div>
+  <div class="stat china"><span class="num">{{ counts.china }}</span><span class="lbl">China</span></div>
+</section>
+
+<nav class="filters">
+  <div class="group">
+    <span class="group-label">Topic</span>
+    <a class="chip {{ 'on' if not active_tag }}" href="{{ url_for('index', region=active_region, days=days) }}">All</a>
+    <a class="chip ai {{ 'on' if active_tag == 'ai' }}" href="{{ url_for('index', tag='ai', region=active_region, days=days) }}">AI</a>
+    <a class="chip quantum {{ 'on' if active_tag == 'quantum' }}" href="{{ url_for('index', tag='quantum', region=active_region, days=days) }}">Quantum</a>
+    <a class="chip china {{ 'on' if active_tag == 'china' }}" href="{{ url_for('index', tag='china', region=active_region, days=days) }}">China</a>
+  </div>
+  <div class="group">
+    <span class="group-label">Region</span>
+    <a class="chip {{ 'on' if not active_region }}" href="{{ url_for('index', tag=active_tag, days=days) }}">All</a>
+    <a class="chip {{ 'on' if active_region == 'china' }}" href="{{ url_for('index', tag=active_tag, region='china', days=days) }}">China</a>
+    <a class="chip {{ 'on' if active_region == 'global' }}" href="{{ url_for('index', tag=active_tag, region='global', days=days) }}">Global</a>
+  </div>
+  <div class="group">
+    <span class="group-label">Window</span>
+    {% for d in [1, 3, 7] %}
+      <a class="chip {{ 'on' if days == d }}" href="{{ url_for('index', tag=active_tag, region=active_region, days=d) }}">{{ d }}d</a>
+    {% endfor %}
+  </div>
+</nav>
+
+<main class="feed">
+  {% if not articles %}
+    <p class="empty">No articles yet for this filter. Hit <strong>Refresh feeds</strong> to pull the latest, or widen the time window.</p>
+  {% endif %}
+  {% for a in articles %}
+  <article class="card">
+    <div class="meta">
+      <span class="source">{{ a.source }}</span>
+      <span class="region region-{{ a.region }}">{{ a.region }}</span>
+      {% if a.published %}<span class="date">{{ a.published[:10] }}</span>{% endif %}
+    </div>
+    <h2><a href="{{ a.link }}" target="_blank" rel="noopener">{{ a.title }}</a></h2>
+    {% if a.summary %}<p class="summary">{{ a.summary }}</p>{% endif %}
+    <div class="tags">
+      {% for t in a.tags %}<span class="tag tag-{{ t }}">{{ t }}</span>{% endfor %}
+    </div>
+  </article>
+  {% endfor %}
+</main>
+
+<footer class="footnote">
+  Last viewed {{ now.strftime('%Y-%m-%d %H:%M UTC') }} &middot; showing last {{ days }} day(s)
+</footer>
+</body>
+</html>

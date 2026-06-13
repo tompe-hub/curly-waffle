@@ -1,0 +1,128 @@
+:root {
+  --bg: #0f1115;
+  --panel: #181b22;
+  --panel-2: #1f232c;
+  --text: #e6e8ec;
+  --muted: #9aa3b2;
+  --border: #2a2f3a;
+  --ai: #4f8cff;
+  --quantum: #b06cff;
+  --china: #ff5d5d;
+  --accent: #21c585;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+a { color: inherit; }
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+.brand h1 { margin: 0; font-size: 20px; letter-spacing: .3px; }
+.tagline { color: var(--muted); font-size: 13px; }
+
+.refresh {
+  background: var(--accent);
+  color: #06281b;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.refresh:hover { filter: brightness(1.08); }
+
+.stats {
+  display: flex;
+  gap: 12px;
+  padding: 18px 24px 4px;
+  flex-wrap: wrap;
+}
+.stat {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 18px;
+  min-width: 84px;
+  text-align: center;
+}
+.stat .num { display: block; font-size: 22px; font-weight: 700; }
+.stat .lbl { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .5px; }
+.stat.ai .num { color: var(--ai); }
+.stat.quantum .num { color: var(--quantum); }
+.stat.china .num { color: var(--china); }
+
+.filters {
+  display: flex;
+  gap: 22px;
+  padding: 14px 24px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--border);
+}
+.group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.group-label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .5px; }
+
+.chip {
+  text-decoration: none;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  font-size: 13px;
+}
+.chip:hover { border-color: var(--muted); }
+.chip.on { background: var(--text); color: #11141a; border-color: var(--text); font-weight: 600; }
+.chip.ai.on { background: var(--ai); border-color: var(--ai); color: #04132e; }
+.chip.quantum.on { background: var(--quantum); border-color: var(--quantum); color: #1a0533; }
+.chip.china.on { background: var(--china); border-color: var(--china); color: #2e0606; }
+
+.feed {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 14px;
+  padding: 20px 24px;
+}
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.card:hover { border-color: #3a4150; }
+.meta { display: flex; gap: 10px; align-items: center; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+.source { font-weight: 600; color: var(--text); }
+.region { text-transform: uppercase; letter-spacing: .4px; font-size: 10px; padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border); }
+.region-china { color: var(--china); border-color: var(--china); }
+.region-global { color: var(--muted); }
+.card h2 { margin: 0; font-size: 16px; line-height: 1.35; }
+.card h2 a { text-decoration: none; }
+.card h2 a:hover { color: var(--accent); }
+.summary { margin: 0; color: var(--muted); font-size: 13px; }
+
+.tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: auto; }
+.tag { font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); text-transform: uppercase; letter-spacing: .4px; }
+.tag-ai { color: var(--ai); border-color: var(--ai); }
+.tag-quantum { color: var(--quantum); border-color: var(--quantum); }
+.tag-china { color: var(--china); border-color: var(--china); }
+
+.empty { color: var(--muted); padding: 40px; text-align: center; grid-column: 1 / -1; }
+.footnote { color: var(--muted); font-size: 12px; padding: 16px 24px 32px; text-align: center; }
