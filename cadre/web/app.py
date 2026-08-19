@@ -16,10 +16,12 @@ from fastapi.templating import Jinja2Templates
 
 from cadre import db
 from cadre.config import Config
-from cadre.extract.lexicon import KIND_LABELS, PHRASES
+from cadre.extract.lexicon import KIND_LABELS, PATTERNS, PHRASES
 
 TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
-GLOSS_BY_RULE = {p.id: p.gloss for p in PHRASES}
+# Both lexicons, or the pattern-extracted sources silently lose their
+# glosses and fall back to showing a bare rule id.
+GLOSS_BY_RULE = {r.id: r.gloss for r in (*PHRASES, *PATTERNS)}
 
 # Refreshing the page should not move the "since you last looked" line out from
 # under you, so a new visit is only recorded after a real gap.

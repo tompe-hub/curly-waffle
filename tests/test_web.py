@@ -66,3 +66,22 @@ def test_creating_a_person_from_the_queue_resolves_the_signal(client, conn):
     assert after["person_id"] is not None
     event = conn.execute("SELECT * FROM event WHERE id = ?", (sig["event_id"],)).fetchone()
     assert event["person_id"] == after["person_id"]
+
+
+def test_appointment_rows_show_their_english_gloss(client, conn, cfg, fetcher):
+    """Every rule id in either lexicon must resolve to a fixed gloss. Building
+    the lookup from one lexicon left the 任免 sources rendering a bare rule id
+    where the explanation belongs."""
+    from cadre.extract.lexicon import PATTERNS, PHRASES
+    from cadre.web.app import GLOSS_BY_RULE
+
+    for rule in (*PHRASES, *PATTERNS):
+        assert GLOSS_BY_RULE.get(rule.id), f"no gloss for {rule.id}"
+
+    from cadre.pipeline import run_daily
+    from cadre.sources import NpcSource
+    run_daily(conn, cfg, fetcher, sources=[NpcSource()])
+    body = client.get("/?show=new").text
+    assert "removed from the post" in body
+    assert "npc.removed</code>" in body                    # provenance, fine
+    assert '<div class="gloss">npc.removed' not in body    # but never as the gloss
