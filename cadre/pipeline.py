@@ -160,6 +160,7 @@ def _extract_and_store(conn, doc_id: int, doc, names: set[str], report: RunRepor
             confidence=raw.confidence,
             name_is_guess=raw.name_is_guess,
             from_document=raw.from_document,
+            paired_appointment=raw.paired_appointment,
         )
 
         cur = conn.execute(

@@ -86,30 +86,76 @@ def cmd_reextract(args, cfg: Config) -> int:
 
 
 def cmd_check_source(args, cfg: Config) -> int:
-    """Fetch a source's listing pages and report what the selectors matched.
+    """Fetch a source's listing pages and report what its selectors matched.
 
-    This is the tool for verifying the CCDI selectors against the live site --
-    they were written from the shapes these CMS pages have historically used and
-    have not been confirmed against a real fetch."""
+    When a selector finds nothing, this does not just say so -- it reads the
+    HTML that came back and proposes the selectors that would work, so a site
+    redesign is a copy-paste fix rather than a debugging session."""
+    from cadre.sources.base import suggest_body_selectors, suggest_list_selectors
+
     source = next((s for s in ALL_SOURCES if s.id == args.source), None)
     if source is None:
         print(f"unknown source: {args.source}", file=sys.stderr)
         return 2
+
+    pattern = getattr(source, "article_pattern", None)
+    problems, sample_article = 0, None
+
     with _fetcher(cfg) as fetcher:
         for url in source.listing_urls():
+            print(f"\n  {url}")
             try:
                 html = fetcher.get(url)
             except Exception as exc:
-                print(f"  {url}\n    FETCH FAILED: {type(exc).__name__}: {exc}")
+                print(f"    FETCH FAILED  {type(exc).__name__}: {exc}")
+                problems += 1
                 continue
+
             links = source.parse_listing(html, url)
-            print(f"  {url}\n    {len(html)} bytes, {len(links)} links parsed")
+            print(f"    {len(html):,} bytes · {len(links)} links parsed")
+
             for link in links[:5]:
-                print(f"      [{link.published_at or '????-??-??'}] {link.title[:60]}")
-                print(f"        {link.url}")
-            if not links:
-                print("    NO LINKS -- selectors need updating (see cadre/sources/ccdi.py)")
-    return 0
+                print(f"      [{link.published_at or '????-??-??'}] {link.title[:58]}")
+            if links:
+                sample_article = sample_article or links[0]
+                continue
+
+            problems += 1
+            print("    NO LINKS -- selectors are stale.")
+            if pattern is None:
+                continue
+            suggestions = suggest_list_selectors(html, url, pattern)
+            if suggestions:
+                print("    try these in _LIST_CONTAINERS "
+                      f"(cadre/sources/{source.id}.py):")
+                for selector, count in suggestions:
+                    print(f"      {selector:<40} {count} article links")
+            else:
+                print("    no article-shaped links found at all -- check "
+                      "_ARTICLE_HREF, or the page may be JavaScript-rendered.")
+
+        # Body selectors break independently of listing selectors, so check one
+        # real article too.
+        if sample_article is not None:
+            print(f"\n  article: {sample_article.url}")
+            try:
+                html = fetcher.get(sample_article.url)
+                doc = source.parse_article(html, sample_article)
+                cjk = sum(1 for ch in doc.text if "一" <= ch <= "鿿")
+                print(f"    extracted {len(doc.text):,} chars ({cjk:,} CJK)")
+                if cjk < 40:
+                    problems += 1
+                    print("    BODY TOO SHORT -- try these in _BODY_SELECTORS:")
+                    for selector, score in suggest_body_selectors(html):
+                        print(f"      {selector:<40} {score:,} CJK chars")
+                else:
+                    print(f"    {doc.text[:120]}...")
+            except Exception as exc:
+                problems += 1
+                print(f"    FAILED  {type(exc).__name__}: {exc}")
+
+    print(f"\n  {'OK' if not problems else str(problems) + ' problem(s)'}")
+    return 0 if not problems else 1
 
 
 def cmd_serve(args, cfg: Config) -> int:

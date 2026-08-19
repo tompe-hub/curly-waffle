@@ -19,7 +19,19 @@ KIND_WEIGHT = {
     "prosecuted": 0.60,
     "arrested": 0.60,
     "sentenced": 0.50,
+    # 任免 vocabulary. The punitive verbs carry information on their own; 免去
+    # is the routine word covering promotion, retirement and purge alike, so it
+    # ranks mid-table and waits for the classifier.
+    "recalled": 0.85,
+    "dismissed": 0.85,
+    "removed": 0.60,
+    "resigned": 0.55,
+    "appointed": 0.45,
 }
+
+# A departure published alongside an onward appointment is a reshuffle; a
+# departure with nothing following it is the case worth looking at.
+PAIRED_APPOINTMENT_DISCOUNT = 0.45
 
 # Watchlist tier: 1 = Politburo and above, 2 = Central Committee full member,
 # 3 = alternate / full-ministerial, 4 = vice-ministerial and below.
@@ -45,6 +57,7 @@ def significance(
     confidence: float,
     name_is_guess: bool,
     from_document: bool = False,
+    paired_appointment: bool = False,
 ) -> float:
     kind_w = KIND_WEIGHT.get(kind, 0.4)
 
@@ -61,4 +74,6 @@ def significance(
         score *= GUESSED_NAME_PENALTY
     if from_document:
         score *= DOC_SUBJECT_PENALTY
+    if paired_appointment:
+        score *= PAIRED_APPOINTMENT_DISCOUNT
     return round(score, 4)

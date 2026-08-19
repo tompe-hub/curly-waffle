@@ -158,3 +158,78 @@ class Fetcher:
 
     def __exit__(self, *exc) -> None:
         self.close()
+
+
+# ----------------------------------------------------- selector discovery ----
+#
+# Government CMSes get redesigned, and the selectors in each source are the
+# first thing to break. Rather than making that a debugging session, these
+# helpers read the fetched HTML and propose the selectors that would work, so
+# `cadre check-source` can hand back a fix instead of an error.
+
+def suggest_list_selectors(
+    html: str, base_url: str, article_pattern: re.Pattern, limit: int = 5
+) -> list[tuple[str, int]]:
+    """Propose container selectors, ranked by how many article links they hold.
+
+    Walks up from every article-looking <a> and tallies the ancestors, so the
+    winner is the repeated row element the listing is actually built from."""
+    tree = HTMLParser(html)
+    tally: dict[str, int] = {}
+
+    for anchor in tree.css("a"):
+        href = anchor.attributes.get("href")
+        if not href or href.startswith(("#", "javascript:")):
+            continue
+        if not article_pattern.search(absolutise(base_url, href)):
+            continue
+        node, depth = anchor.parent, 0
+        while node is not None and depth < 4:
+            selector = _selector_for(node)
+            if selector:
+                tally[selector] = tally.get(selector, 0) + 1
+            node, depth = node.parent, depth + 1
+
+    ranked = sorted(tally.items(), key=lambda kv: (-kv[1], len(kv[0])))
+    return ranked[:limit]
+
+
+def suggest_body_selectors(html: str, limit: int = 5) -> list[tuple[str, int]]:
+    """Propose article-body selectors, ranked by how much CJK text they hold.
+
+    The body is almost always the densest block of Chinese on the page, and
+    picking by character count is far more robust across redesigns than
+    guessing at class names."""
+    tree = HTMLParser(html)
+    scored: list[tuple[str, int]] = []
+    seen: set[str] = set()
+
+    for node in tree.css("div, article, section"):
+        selector = _selector_for(node)
+        if not selector or selector in seen:
+            continue
+        seen.add(selector)
+        cjk = sum(1 for ch in (node.text() or "") if "一" <= ch <= "鿿")
+        if cjk >= 40:
+            scored.append((selector, cjk))
+
+    # Prefer the tightest node: the outermost wrapper also contains the body,
+    # but the smallest one that still holds the text is the real target.
+    scored.sort(key=lambda kv: (-kv[1], len(kv[0])))
+    best = scored[0][1] if scored else 0
+    tight = [s for s in scored if s[1] >= best * 0.85]
+    tight.sort(key=lambda kv: kv[1])
+    return tight[:limit]
+
+
+def _selector_for(node) -> str | None:
+    tag = node.tag
+    if tag in (None, "-undef", "html", "body", "[document]"):
+        return None
+    node_id = (node.attributes.get("id") or "").strip()
+    if node_id:
+        return f"{tag}#{node_id}"
+    classes = (node.attributes.get("class") or "").split()
+    if classes:
+        return f"{tag}." + ".".join(classes[:2])
+    return tag
