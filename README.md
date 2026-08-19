@@ -21,15 +21,52 @@ first; most of the value is in the last two. Everything the system claims points
 at an archived document and a verbatim Chinese span, because a research tool
 that cannot show its work is not usable.
 
-## Quick start
+## Getting to the dashboard
+
+**There is no hosted instance and no URL.** This is a local application: the
+dashboard is a small web server you run on your own machine, reading a SQLite
+file the daily job writes next to it. Nothing is deployed anywhere.
+
+Needs Python 3.11 or newer. From a clean checkout:
 
 ```bash
-python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"
+git clone -b claude/personnel-website-monitor-1p7o7r \
+    https://github.com/tompe-hub/curly-waffle.git cadre-watch
+cd cadre-watch
+
+python3 -m venv .venv
+.venv/bin/pip install -e ".[dev]"
 
 .venv/bin/cadre init                    # create the database, seed the watchlist
-CADRE_OFFLINE=1 .venv/bin/cadre run     # run against the test fixtures
-.venv/bin/cadre serve                   # dashboard on http://127.0.0.1:8000
+CADRE_OFFLINE=1 .venv/bin/cadre run     # populate it from the test fixtures
+.venv/bin/cadre serve                   # serves on http://127.0.0.1:8000
 ```
+
+Then open <http://127.0.0.1:8000> in a browser on that same machine. Ctrl-C
+stops it. Drop `CADRE_OFFLINE=1` to fetch the real sites instead of fixtures —
+but read [Before your first live run](#before-your-first-live-run) first, and
+expect an empty dashboard until the selectors are verified.
+
+The dashboard shows whatever is in the database; it does not fetch anything
+itself. If it looks empty, run `cadre run`, then `cadre stats` to confirm rows
+exist.
+
+### Reaching it on a server
+
+**The dashboard has no authentication.** Anyone who can reach the port can read
+everything and click the review buttons. So when it runs on a VPS, leave it
+bound to localhost and tunnel in over SSH rather than exposing it:
+
+```bash
+# on the server, from cron or a systemd unit
+cadre serve --host 127.0.0.1 --port 8000
+
+# from your laptop
+ssh -N -L 8000:127.0.0.1:8000 you@your-server
+```
+
+Then open <http://127.0.0.1:8000> locally. Do not pass `--host 0.0.0.0` unless
+you have put a reverse proxy with authentication in front of it.
 
 Against the live site, drop `CADRE_OFFLINE` — but read
 [Before your first live run](#before-your-first-live-run) first.
