@@ -51,39 +51,78 @@ The dashboard shows whatever is in the database; it does not fetch anything
 itself. If it looks empty, run `cadre run`, then `cadre stats` to confirm rows
 exist.
 
-### Reaching it on a server
+### Reaching it from a phone
 
-**The dashboard has no authentication.** Anyone who can reach the port can read
-everything and click the review buttons. So when it runs on a VPS, leave it
-bound to localhost and tunnel in over SSH rather than exposing it:
+You cannot run this on a phone (barring Termux — see below): it needs Python and
+a filesystem. The dashboard runs on a computer or a small server, and the phone
+is a browser pointed at it. Four ways, most to least recommended.
+
+**1. Tailscale.** The best answer for one person with a phone. Nothing is
+exposed to the internet, the phone gets an HTTPS URL, and there is no password
+to manage:
 
 ```bash
-# on the server, from cron or a systemd unit
-cadre serve --host 127.0.0.1 --port 8000
+# on the server
+tailscale up
+cadre serve --host 127.0.0.1 --port 8000 &
+tailscale serve --bg 8000            # publishes it on your tailnet over HTTPS
+```
 
-# from your laptop
+Install Tailscale on the phone, sign in to the same account, open the URL
+`tailscale serve status` prints. Only your devices can reach it.
+
+**2. A password, behind HTTPS.** Setting `CADRE_PASSWORD` turns on HTTP Basic
+auth. `cadre serve` refuses to bind a non-local address without it — the review
+controls are unconfirmed POST endpoints, so an open port is a writable instance,
+not just a readable one.
+
+```bash
+export CADRE_PASSWORD='...'          # CADRE_USER defaults to "cadre"
+cadre serve --host 127.0.0.1 --port 8000
+```
+
+Then terminate TLS in front of it, because Basic auth sends the password on
+every request. Caddy does this in two lines:
+
+```
+cadre.example.com {
+    reverse_proxy 127.0.0.1:8000
+}
+```
+
+Never expose it over plain HTTP. `--insecure` overrides the guard; don't.
+
+**3. An SSH tunnel**, if you already have an SSH client on your phone
+(Termius, Blink, Termux):
+
+```bash
 ssh -N -L 8000:127.0.0.1:8000 you@your-server
 ```
 
-Then open <http://127.0.0.1:8000> locally. Do not pass `--host 0.0.0.0` unless
-you have put a reverse proxy with authentication in front of it.
+Then open <http://127.0.0.1:8000> on the phone.
 
-Against the live site, drop `CADRE_OFFLINE` — but read
-[Before your first live run](#before-your-first-live-run) first.
+**4. A static snapshot**, with no server at all. `cadre export` writes one
+self-contained HTML file — inline styles, no scripts, no network — that opens
+in any mobile browser. Mail it to yourself, or have cron drop it somewhere:
 
 ```bash
-.venv/bin/python -m pytest              # 86 tests, no network needed
+cadre export --out snapshot.html
 ```
 
-### Daily, from cron
+The review controls are omitted, since they cannot work without the app. Use
+`--sample` when exporting fixture data: it banners the file and tags the
+invented names from `tests/fixtures/SYNTHETIC_NAMES.txt`. That matters more than
+it sounds — the fixtures are written in the exact format of real
+discipline-inspection notices, and an unlabelled snapshot would read as genuine
+reporting that named people are under investigation.
 
-```cron
-0 2 * * *  cd /srv/cadre && CADRE_DATA=/srv/cadre/data .venv/bin/cadre run >> /var/log/cadre.log 2>&1
-```
+**Android only:** Termux does run this on the phone itself —
+`pkg install python git`, then the quick-start above, then open
+<http://127.0.0.1:8000> in the phone's browser. Fine for reading; the daily
+`cadre run` still wants a machine that is awake at 02:00.
 
-02:00 Beijing time is after the previous day's news cycle has settled, including
-the Friday-evening announcement dumps. The job is idempotent — running it twice
-costs a few HTTP requests and changes nothing — so a retry is always safe.
+The dashboard is responsive and its controls are sized for touch, so all four
+routes are usable on a phone once you can reach it.
 
 ## How it works
 
@@ -368,9 +407,9 @@ cadre/
   cluster.py        signals → events
   score.py          significance ranking
   pipeline.py       the daily job; idempotent, replayable
-  web/              FastAPI dashboard + templates
+  web/              FastAPI dashboard, templates, static export
   cli.py            init / import / run / reextract / check-source /
-                    serve / stats
+                    serve / export / stats
 seed/watchlist.csv  starter watchlist (replace with a CPED import)
-tests/              86 tests, fixture-driven, no network
+tests/              103 tests, fixture-driven, no network
 ```

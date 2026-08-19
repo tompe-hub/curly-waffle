@@ -7,12 +7,15 @@ threshold to tune -- only an order.
 """
 from __future__ import annotations
 
+import os
+import secrets
 from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import FastAPI, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from cadre import db
 from cadre.config import Config
@@ -28,6 +31,48 @@ GLOSS_BY_RULE = {r.id: r.gloss for r in (*PHRASES, *PATTERNS)}
 VISIT_GAP_HOURS = 4
 
 app = FastAPI(title="cadre-watch")
+
+
+class BasicAuthMiddleware(BaseHTTPMiddleware):
+    """HTTP Basic auth, enabled by setting CADRE_PASSWORD.
+
+    Off by default, because the common case is localhost where it adds nothing.
+    It exists for the case that actually needs it: reaching the dashboard from a
+    phone, where the alternative is leaving an unauthenticated page open to
+    anyone who finds the port. `cadre serve` refuses to bind a non-local address
+    without it.
+
+    Basic auth sends the password on every request, so this is only safe behind
+    HTTPS or on a private network like Tailscale -- never over plain HTTP on the
+    open internet.
+    """
+
+    async def dispatch(self, request, call_next):
+        password = os.environ.get("CADRE_PASSWORD")
+        if not password:
+            return await call_next(request)
+
+        user = os.environ.get("CADRE_USER", "cadre")
+        header = request.headers.get("authorization", "")
+        if header.startswith("Basic "):
+            import base64
+            try:
+                decoded = base64.b64decode(header[6:]).decode("utf-8")
+                got_user, _, got_password = decoded.partition(":")
+            except Exception:
+                got_user = got_password = ""
+            # constant-time on both halves, so neither can be probed by timing
+            if (secrets.compare_digest(got_user, user)
+                    and secrets.compare_digest(got_password, password)):
+                return await call_next(request)
+
+        return Response(
+            "Authentication required", status_code=401,
+            headers={"WWW-Authenticate": 'Basic realm="cadre-watch"'},
+        )
+
+
+app.add_middleware(BasicAuthMiddleware)
 
 
 def _conn():

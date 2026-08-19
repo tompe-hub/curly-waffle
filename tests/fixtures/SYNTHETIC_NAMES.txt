@@ -1,0 +1,17 @@
+# People invented for the test fixtures. They do not exist.
+#
+# They are written in the exact format of real discipline-inspection and 任免
+# announcements, which is the point -- it is what exercises the parser. It also
+# means an unlabelled snapshot of the fixture corpus would read as genuine
+# reporting that these named individuals are under investigation. `cadre export
+# --sample` reads this file and tags them, so that cannot happen by accident.
+#
+# Real, documented cases in the fixtures (NOT listed here): 唐仁健, 李晓鹏,
+# 韩俊, 李强, 秦刚.
+张伟
+赵国平
+孙立民
+王强
+陈建国
+王守成
+周明

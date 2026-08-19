@@ -183,6 +183,7 @@ class ImportReport:
     rows_skipped: int = 0
     people_created: int = 0
     people_updated: int = 0
+    people_adopted: int = 0
     orgs_created: int = 0
     positions_created: int = 0
     spells_created: int = 0
@@ -197,6 +198,8 @@ class ImportReport:
             f"rows skipped       {self.rows_skipped}",
             f"people created     {self.people_created}",
             f"people updated     {self.people_updated}",
+            f"people adopted     {self.people_adopted}   "
+            f"(pre-existing rows claimed by this dataset)",
             f"orgs created       {self.orgs_created}",
             f"positions created  {self.positions_created}",
             f"spells created     {self.spells_created}",
@@ -309,20 +312,43 @@ def _upsert_person(conn, row, get, dataset: str, report: ImportReport) -> int:
 
     # external_id is the reliable key. Without one, name alone is not enough --
     # homonyms are common -- so birth year is part of the identity.
+    found = None
     if external_id:
         found = conn.execute(
             "SELECT id FROM person WHERE source_dataset = ? AND external_id = ?",
             (dataset, external_id),
         ).fetchone()
-    elif birth_year:
-        found = conn.execute(
-            "SELECT id FROM person WHERE name_zh = ? AND birth_year = ?",
-            (name, birth_year),
-        ).fetchone()
-    else:
-        found = conn.execute(
-            "SELECT id FROM person WHERE name_zh = ? AND birth_year IS NULL", (name,)
-        ).fetchone()
+
+    if found is None:
+        # Adoption. A row already in the database with the same name and birth
+        # year, carrying no external id of its own, is this person -- it came
+        # from the seed, the review queue, or an earlier import. Creating a
+        # second record instead would split their evidence across two person
+        # pages, which is both worse and much harder to notice than the rare
+        # case this gets wrong (two officials sharing a name AND a birth year).
+        # Adoptions are counted in the report so the merge is never silent.
+        if birth_year:
+            found = conn.execute(
+                """SELECT id, external_id FROM person
+                    WHERE name_zh = ? AND birth_year = ?
+                      AND (external_id IS NULL OR source_dataset = ?)
+                    ORDER BY external_id IS NOT NULL DESC LIMIT 1""",
+                (name, birth_year, dataset),
+            ).fetchone()
+        else:
+            found = conn.execute(
+                """SELECT id, external_id FROM person
+                    WHERE name_zh = ? AND birth_year IS NULL
+                      AND (external_id IS NULL OR source_dataset = ?)
+                    LIMIT 1""",
+                (name, dataset),
+            ).fetchone()
+        if found is not None and external_id and found["external_id"] is None:
+            conn.execute(
+                "UPDATE person SET external_id = ?, source_dataset = ? WHERE id = ?",
+                (external_id, dataset, found["id"]),
+            )
+            report.people_adopted += 1
 
     values = {
         "name_pinyin": get(row, "name_pinyin") or None,

@@ -30,6 +30,15 @@ _ADDED_COLUMNS: list[tuple[str, str, str]] = [
     ("person", "source_dataset", "TEXT"),
 ]
 
+# Indexes that reference added columns. These must run after the ALTERs, which
+# is why they cannot live in schema.sql -- that executes first, against tables
+# that may predate the columns.
+_POST_MIGRATION_SQL: list[str] = [
+    """CREATE UNIQUE INDEX IF NOT EXISTS idx_person_external
+         ON person(source_dataset, external_id)
+       WHERE external_id IS NOT NULL""",
+]
+
 
 def migrate(conn: sqlite3.Connection) -> None:
     """Apply schema.sql, then any additive column migrations. Idempotent: this
@@ -40,6 +49,8 @@ def migrate(conn: sqlite3.Connection) -> None:
         existing = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}
         if column not in existing:
             conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {coltype}")
+    for statement in _POST_MIGRATION_SQL:
+        conn.execute(statement)
     conn.commit()
 
 

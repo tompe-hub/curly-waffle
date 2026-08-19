@@ -243,3 +243,33 @@ def test_stata_files_are_refused_with_the_conversion_command(conn, tmp_path):
     path.write_bytes(b"not really stata")
     with pytest.raises(ValueError, match="pyreadstat"):
         import_roster(conn, path)
+
+
+def test_a_homonym_with_a_different_birth_year_is_a_different_person(conn):
+    """Adoption must not collapse two officials who merely share a name."""
+    conn.execute("INSERT INTO person (name_zh, birth_year) VALUES ('唐仁健', 1975)")
+    conn.commit()
+    report = import_roster(conn, CPED)
+    assert report.people_adopted == 0          # 1975 is not the CPED 1962
+    years = [
+        r["birth_year"] for r in conn.execute(
+            "SELECT birth_year FROM person WHERE name_zh = '唐仁健' ORDER BY id")
+    ]
+    assert 1962 in years and 1975 in years     # kept apart, not merged
+
+
+def test_a_row_already_claimed_by_another_dataset_is_not_stolen(conn):
+    conn.execute(
+        """INSERT INTO person (name_zh, birth_year, external_id, source_dataset)
+           VALUES ('唐仁健', 1962, 'W99', 'wikidata')"""
+    )
+    conn.commit()
+    report = import_roster(conn, CPED, dataset="cped")
+    assert report.people_adopted == 0
+    claimed = {
+        (r["source_dataset"], r["external_id"]) for r in conn.execute(
+            "SELECT source_dataset, external_id FROM person WHERE name_zh = '唐仁健'")
+        if r["external_id"]
+    }
+    # the wikidata row keeps its own id; cped gets a separate row
+    assert claimed == {("wikidata", "W99"), ("cped", "C0001")}

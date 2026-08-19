@@ -237,9 +237,54 @@ def cmd_import(args, cfg: Config) -> int:
     return 0
 
 
+LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
+
+
 def cmd_serve(args, cfg: Config) -> int:
+    """Start the dashboard.
+
+    Refuses to bind a non-local address without a password, because the
+    dashboard shows everything and its review controls are all POST endpoints
+    with no confirmation -- an open port is a fully writable instance."""
+    import os
+
     import uvicorn
+
+    if args.host not in LOCAL_HOSTS and not os.environ.get("CADRE_PASSWORD"):
+        if not args.insecure:
+            print(
+                f"refusing to bind {args.host} with no password set.\n\n"
+                "  The dashboard has no authentication of its own, and its review\n"
+                "  controls are unconfirmed POSTs -- anyone who reaches the port\n"
+                "  can read and change everything.\n\n"
+                "  Either:\n"
+                "    export CADRE_PASSWORD=...      # enables HTTP Basic auth\n"
+                "    cadre serve --host 127.0.0.1   # and reach it over SSH or Tailscale\n\n"
+                "  Basic auth sends the password on every request, so use it only\n"
+                "  behind HTTPS or on a private network. --insecure overrides this.",
+                file=sys.stderr,
+            )
+            return 2
+        print("WARNING: serving without authentication on a non-local address",
+              file=sys.stderr)
+
     uvicorn.run("cadre.web.app:app", host=args.host, port=args.port, reload=args.reload)
+    return 0
+
+
+def cmd_export(args, cfg: Config) -> int:
+    """Write a self-contained HTML snapshot of the dashboard."""
+    from cadre.web.export import load_synthetic_names, render
+
+    conn = db.connect(cfg.db_path)
+    db.migrate(conn)
+    names = load_synthetic_names(FIXTURE_DIR / "SYNTHETIC_NAMES.txt") if args.sample else set()
+    html = render(conn, sample=args.sample, synthetic_names=names, limit=args.limit)
+    out = Path(args.out)
+    out.write_text(html, encoding="utf-8")
+    print(f"wrote {out}  ({len(html):,} bytes)")
+    if args.sample:
+        print(f"  marked as sample data; {len(names)} invented names tagged")
     return 0
 
 
@@ -305,7 +350,16 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=8000)
     p.add_argument("--reload", action="store_true")
+    p.add_argument("--insecure", action="store_true",
+                   help="allow binding a public address with no password (don't)")
     p.set_defaults(func=cmd_serve)
+
+    p = sub.add_parser("export", help="write a static HTML snapshot")
+    p.add_argument("--out", default="cadre-snapshot.html")
+    p.add_argument("--limit", type=int, default=200)
+    p.add_argument("--sample", action="store_true",
+                   help="label the output as fixture-derived and tag invented names")
+    p.set_defaults(func=cmd_export)
 
     p = sub.add_parser("stats", help="database summary")
     p.set_defaults(func=cmd_stats)

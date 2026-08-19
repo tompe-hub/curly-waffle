@@ -85,3 +85,72 @@ def test_appointment_rows_show_their_english_gloss(client, conn, cfg, fetcher):
     assert "removed from the post" in body
     assert "npc.removed</code>" in body                    # provenance, fine
     assert '<div class="gloss">npc.removed' not in body    # but never as the gloss
+
+
+# ----------------------------------------------------------------- export ---
+
+def test_export_is_self_contained_and_has_no_controls(conn, cfg, fetcher):
+    """A snapshot has no server behind it, so the review controls must not
+    appear -- and nothing may reference a stylesheet that will not be there."""
+    from cadre.pipeline import run_daily
+    from cadre.sources import CcdiSource
+    from cadre.web.export import render
+
+    run_daily(conn, cfg, fetcher, sources=[CcdiSource()])
+    html = render(conn)
+    assert "唐仁健" in html
+    assert "<form" not in html
+    assert "<link" not in html          # styles are inline
+    assert "src=" not in html
+
+
+def test_sample_export_labels_invented_people(conn, cfg, fetcher):
+    """The fixtures contain invented officials written in the format of real
+    announcements. An unlabelled snapshot of them would read as reporting."""
+    from pathlib import Path
+
+    from cadre.pipeline import run_daily
+    from cadre.sources import CcdiSource
+    from cadre.web.export import load_synthetic_names, render
+
+    run_daily(conn, cfg, fetcher, sources=[CcdiSource()])
+    names = load_synthetic_names(
+        Path(__file__).parent / "fixtures" / "SYNTHETIC_NAMES.txt")
+    assert "张伟" in names
+    assert "唐仁健" not in names        # a real, documented case
+
+    html = render(conn, sample=True, synthetic_names=names)
+    assert "SAMPLE DATA" in html
+    assert "SYNTHETIC" in html
+
+    plain = render(conn, sample=False)
+    assert "SAMPLE DATA" not in plain
+    assert "SYNTHETIC" not in plain
+
+
+def test_export_escapes_document_text(conn, cfg, fetcher):
+    """Quoted spans come from fetched pages -- they are untrusted input and
+    must not be able to inject markup into a file that gets shared."""
+    from cadre.web.export import render
+
+    conn.execute(
+        """INSERT INTO document (sha256, source_id, url, title, fetched_at, archive_path)
+           VALUES ('x', 'ccdi', 'https://x.invalid/a', 't', datetime('now'), 'a')"""
+    )
+    doc_id = conn.execute("SELECT id FROM document").fetchone()["id"]
+    conn.execute(
+        """INSERT INTO event (kind, first_seen_at, last_seen_at, significance, raw_name)
+           VALUES ('investigation_opened', datetime('now'), datetime('now'), 1.0, 'x')"""
+    )
+    event_id = conn.execute("SELECT id FROM event").fetchone()["id"]
+    conn.execute(
+        """INSERT INTO signal (document_id, event_id, kind, raw_name, quoted_span,
+                               rule_id, confidence, resolution)
+           VALUES (?, ?, 'investigation_opened', 'x',
+                   '<script>alert(1)</script>', 'r', 0.9, 'unknown_person')""",
+        (doc_id, event_id),
+    )
+    conn.commit()
+    html = render(conn)
+    assert "<script>alert(1)</script>" not in html
+    assert "&lt;script&gt;" in html

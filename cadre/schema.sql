@@ -30,9 +30,9 @@ CREATE TABLE IF NOT EXISTS person (
     created_at    TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at    TEXT
 );
-CREATE UNIQUE INDEX IF NOT EXISTS idx_person_external
-    ON person(source_dataset, external_id)
-    WHERE external_id IS NOT NULL;
+-- NOTE: the unique index over (source_dataset, external_id) is created in
+-- db.py after the additive column migrations, not here. This file runs first,
+-- against tables that may predate those columns.
 CREATE INDEX IF NOT EXISTS idx_person_name ON person(name_zh);
 
 -- Watchlist tier drives significance scoring. 1 = Politburo and above,
