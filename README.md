@@ -72,7 +72,7 @@ Against the live site, drop `CADRE_OFFLINE` — but read
 [Before your first live run](#before-your-first-live-run) first.
 
 ```bash
-.venv/bin/python -m pytest              # 39 tests, no network needed
+.venv/bin/python -m pytest              # 86 tests, no network needed
 ```
 
 ### Daily, from cron
@@ -202,9 +202,6 @@ the archive; selector autodiscovery; and a four-view dashboard.
 
 **Not yet, in build order:**
 
-1. **A real watchlist.** `seed/watchlist.csv` is fourteen people for smoke
-   testing, not a dataset. Bootstrap properly from CPED (Chinese Political Elite
-   Database) or Wikidata rather than scraping career histories yourself.
 2. **Roster snapshotting and scrub detection** — diff official leadership pages,
    with a run-level sanity floor so a failed scrape never reads as mass removal.
 3. **Appearance ingestion and the quiet list** — the highest-value view, and the
@@ -219,6 +216,120 @@ the archive; selector autodiscovery; and a four-view dashboard.
    in fact.
 5. **LLM extraction pass** on the tail the rules miss, via the Batch API (50%
    off, and a daily job has no latency requirement).
+
+## Loading a real watchlist
+
+`seed/watchlist.csv` is fourteen people for smoke testing. Nothing the ranking
+says means much against a list that small, so the first real step is importing
+a proper roster.
+
+```bash
+cadre init --no-seed                              # skip the smoke-test rows
+cadre import roster.csv --dry-run                 # look before you leap
+cadre import roster.csv --max-tier 3
+```
+
+**Always dry-run first.** It prints the resolved column mapping, what it could
+not match, near-miss suggestions, and the counts it would write — without
+touching the database. The importer never fuzzy-matches a column: a wrong
+automatic mapping is silent and permanent, an unmatched one is visible and
+fixable, so it reports rather than guesses.
+
+```
+  mapped:
+    name_zh          <- name_zh
+    rank             <- admin_rank
+    org              <- work_unit
+  not found:
+    name_pinyin   (did you mean --map name_pinyin='name_py' ?)
+```
+
+Fix anything it missed with repeatable `--map field=column`:
+
+```bash
+cadre import roster.csv --map name_zh=官员姓名 --map rank=级别
+```
+
+### What gets derived
+
+One row is one person-position spell; files with no position columns import as
+people only. Three things are computed rather than read:
+
+- **`rank_score`** — 行政级别 mapped to a comparable number (正国级 100 …
+  副科级 10), so promotion can later be defined as an increase rather than
+  hand-checked. Recognises the formal (省部级正职), colloquial (正部级) and
+  translated ("vice-ministerial") spellings.
+- **`tier`** — the watchlist tier driving dashboard ranking. Committee standing
+  and bureaucratic rank are independent readings of seniority and the more
+  senior wins: an NPC vice-chairman is 副国级 and outranks an ordinary Central
+  Committee member, while a Politburo member outranks their nominal rank. A
+  person's tier is the most senior standing across all their spells.
+- **`is_sideline`** — the "kicked upstairs" flag, set when the organisation and
+  title together match an NPC or CPPCC committee seat or a 巡视员 posting.
+  These read as lateral or upward by rank and are career termination in fact;
+  without the flag, a rank-delta classifier scores them as promotions.
+
+`--max-tier` filters the **watchlist only**. Everyone in the file becomes a
+`person` row regardless, because recognising a name during extraction is useful
+even for someone you are not actively watching — that is exactly what turns an
+unresolved review-queue item into a resolved signal.
+
+Re-importing is safe: people dedup on the dataset's own id where there is one
+and on (name, birth year) otherwise, spells dedup on (person, position, start),
+and a later blank never overwrites a value an earlier row supplied.
+
+### Getting CPED
+
+The Chinese Political Elite Database (Junyan Jiang) is the dataset worth
+starting from — thousands of officials with coded career histories, which is
+years of work you do not have to repeat. Find its current distribution and
+licence terms yourself; it has moved between hosts, and academic datasets
+normally require citation in anything you publish. **These URLs are not
+verified here** — this was built in a sandbox with no network access to any of
+them.
+
+CPED has shipped as Stata. Convert before importing:
+
+```bash
+pip install pandas pyreadstat
+python -c "import pandas as pd; pd.read_stata('cped.dta').to_csv('cped.csv', index=False)"
+```
+
+The importer refuses `.dta` directly and prints that command rather than
+guessing at a reader.
+
+### Wikidata as a fallback
+
+If CPED is not available to you, Wikidata gives a thinner but immediately
+usable skeleton. Run this at <https://query.wikidata.org>, download CSV, and
+import it with the same command — the alias matching handles the different
+column names.
+
+```sparql
+SELECT ?person ?personLabel ?personEn ?birth ?positionLabel ?startTime ?endTime
+WHERE {
+  ?person wdt:P27 wd:Q148 ;          # citizenship: PRC
+          wdt:P106 wd:Q82955 .       # occupation: politician
+  OPTIONAL { ?person wdt:P569 ?birth . }
+  ?person p:P39 ?statement .         # position held
+  ?statement ps:P39 ?position .
+  OPTIONAL { ?statement pq:P580 ?startTime . }
+  OPTIONAL { ?statement pq:P582 ?endTime . }
+  OPTIONAL { ?person rdfs:label ?personEn FILTER(lang(?personEn) = "en") }
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "zh,zh-hans". }
+}
+LIMIT 5000
+```
+
+```bash
+cadre import query.csv --dataset wikidata --max-tier 4
+```
+
+This query is written from the Wikidata data model but **has not been run** —
+no network access here. Expect to adjust it. Wikidata carries no 行政级别, so
+tiers will come out mostly from position titles and will be rougher than CPED's;
+treat it as a starting skeleton to correct through the review queue, not as
+ground truth.
 
 ## Costs
 
@@ -251,12 +362,15 @@ cadre/
   sources/          base.py (fetcher + selector discovery), cms.py (shared
                     CMS parsing), ccdi.py, npc.py, statecouncil.py
   extract/          lexicon.py (phrases, patterns, glosses), rules.py
+  importers/        roster.py (column mapping + load), ranks.py
+                    (rank scores, watchlist tiers, sideline posts)
   resolve.py        name → person, with an explicit ambiguous outcome
   cluster.py        signals → events
   score.py          significance ranking
   pipeline.py       the daily job; idempotent, replayable
   web/              FastAPI dashboard + templates
-  cli.py            init / run / reextract / check-source / serve / stats
+  cli.py            init / import / run / reextract / check-source /
+                    serve / stats
 seed/watchlist.csv  starter watchlist (replace with a CPED import)
-tests/              39 tests, fixture-driven, no network
+tests/              86 tests, fixture-driven, no network
 ```

@@ -17,10 +17,18 @@ from pathlib import Path
 
 from cadre import db
 from cadre.config import Config
+from cadre.importers import import_roster, inspect_file
 from cadre.pipeline import reextract, run_daily
 from cadre.sources import ALL_SOURCES, ENABLED_SOURCES, Fetcher
 
 FIXTURE_DIR = Path(__file__).resolve().parent.parent / "tests" / "fixtures"
+
+# display order for the import mapping report
+FIELDS_ORDER = [
+    "external_id", "name_zh", "name_pinyin", "birth_year", "birth_month",
+    "sex", "native_place", "ethnicity", "cc_status", "rank",
+    "org", "position_title", "start_date", "end_date",
+]
 
 
 def _fetcher(cfg: Config) -> Fetcher:
@@ -39,6 +47,9 @@ def cmd_init(args, cfg: Config) -> int:
     db.migrate(conn)
     seed = Path(args.seed)
     added = 0
+    if args.no_seed:
+        print(f"database ready at {cfg.db_path}; no seed loaded")
+        return 0
     if seed.exists():
         with seed.open(encoding="utf-8") as fh:
             rows = csv.DictReader(line for line in fh if not line.startswith("#"))
@@ -158,6 +169,74 @@ def cmd_check_source(args, cfg: Config) -> int:
     return 0 if not problems else 1
 
 
+def cmd_import(args, cfg: Config) -> int:
+    """Import a roster (CPED, Wikidata, or any tabular file of officials).
+
+    Always shows the resolved column mapping before importing, because a
+    silently mis-mapped column is the failure mode that matters here."""
+    conn = db.connect(cfg.db_path)
+    db.migrate(conn)
+
+    path = Path(args.file)
+    if not path.exists():
+        print(f"no such file: {path}", file=sys.stderr)
+        return 2
+
+    overrides = {}
+    for pair in args.map or []:
+        if "=" not in pair:
+            print(f"--map expects field=column, got {pair!r}", file=sys.stderr)
+            return 2
+        fname, column = pair.split("=", 1)
+        overrides[fname.strip()] = column.strip()
+
+    try:
+        mapping, rows, columns = inspect_file(path, overrides, args.encoding)
+    except ValueError as exc:
+        print(exc, file=sys.stderr)
+        return 2
+
+    print(f"\n{path}  ({len(rows)} rows, {len(columns)} columns)\n")
+    print("  mapped:")
+    for fname in FIELDS_ORDER:
+        if fname in mapping.resolved:
+            print(f"    {fname:<16} <- {mapping.resolved[fname]}")
+    if mapping.unmatched_fields:
+        print("\n  not found:")
+        for fname in mapping.unmatched_fields:
+            hint = mapping.suggestions.get(fname)
+            suffix = f"   (did you mean --map {fname}={hint!r} ?)" if hint else ""
+            print(f"    {fname}{suffix}")
+    if mapping.unused_columns:
+        print(f"\n  unused columns: {', '.join(mapping.unused_columns[:12])}"
+              + (" ..." if len(mapping.unused_columns) > 12 else ""))
+    if not mapping.ok:
+        print("\n  ABORT: no column matched name_zh. Use --map name_zh=<column>.",
+              file=sys.stderr)
+        return 1
+    if not mapping.has_spells:
+        print("\n  note: no position columns matched -- importing people only, "
+              "no career spells.")
+
+    try:
+        report = import_roster(
+            conn, path, overrides=overrides, dataset=args.dataset,
+            max_tier=args.max_tier, dry_run=args.dry_run, encoding=args.encoding,
+        )
+    except ValueError as exc:
+        print(f"\n  {exc}", file=sys.stderr)
+        return 1
+
+    print("\n  " + ("DRY RUN -- nothing written" if args.dry_run else "imported"))
+    for line in report.lines():
+        print(f"    {line}")
+    for warning in report.warnings[:10]:
+        print(f"    ! {warning}")
+    if args.dry_run:
+        print("\n  re-run without --dry-run to apply.")
+    return 0
+
+
 def cmd_serve(args, cfg: Config) -> int:
     import uvicorn
     uvicorn.run("cadre.web.app:app", host=args.host, port=args.port, reload=args.reload)
@@ -190,6 +269,10 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser("init", help="create database and seed the watchlist")
     p.add_argument("--seed", default="seed/watchlist.csv")
+    p.add_argument("--no-seed", action="store_true",
+                   help="skip the smoke-test watchlist -- use this when you are "
+                        "importing a real roster, since the seed rows carry no "
+                        "birth year and would not dedup against it")
     p.set_defaults(func=cmd_init)
 
     p = sub.add_parser("run", help="run the daily job")
@@ -203,6 +286,20 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("check-source", help="diagnose a source's selectors")
     p.add_argument("source")
     p.set_defaults(func=cmd_check_source)
+
+    p = sub.add_parser("import", help="import a roster file (CPED, Wikidata, CSV)")
+    p.add_argument("file")
+    p.add_argument("--dataset", default="cped",
+                   help="name recorded as the provenance of these rows")
+    p.add_argument("--map", action="append", metavar="FIELD=COLUMN",
+                   help="override column matching, repeatable")
+    p.add_argument("--max-tier", type=int, default=3,
+                   help="watchlist people at this tier or more senior "
+                        "(default 3); everyone is imported as a person regardless")
+    p.add_argument("--encoding", default="utf-8")
+    p.add_argument("--dry-run", action="store_true",
+                   help="show the mapping and counts without writing")
+    p.set_defaults(func=cmd_import)
 
     p = sub.add_parser("serve", help="start the dashboard")
     p.add_argument("--host", default="127.0.0.1")

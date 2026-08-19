@@ -1,0 +1,7 @@
+person_id,name_zh,name_py,gender,birth_year,native_place,ethnicity,cc_status,admin_rank,work_unit,position,start_date,end_date
+C0001,唐仁健,Tang Renjian,M,1962,重庆,汉族,中央委员,正部级,农业农村部,部长,2020-12,2024-05
+C0001,唐仁健,Tang Renjian,M,1962,重庆,汉族,中央委员,正部级,甘肃省人民政府,省长,2017-04,2020-12
+C0002,李强,Li Qiang,M,1959,浙江,汉族,中央政治局常委,正国级,国务院,总理,2023-03,
+C0003,秦刚,Qin Gang,M,1966,天津,汉族,中央委员,正部级,外交部,部长,2022-12,2023-07
+C0004,陈建国,Chen Jianguo,M,1968,河北,汉族,,副部级,水利部,副部长,2021-06,
+C0005,王守成,Wang Shoucheng,M,1955,山东,汉族,中央委员,副国级,全国人民代表大会常务委员会,副委员长,2023-03,

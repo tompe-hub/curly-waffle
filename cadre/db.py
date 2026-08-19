@@ -22,11 +22,24 @@ def connect(db_path: Path, *, read_only: bool = False) -> sqlite3.Connection:
     return conn
 
 
+# Columns added after a database may already exist in the wild. schema.sql is
+# CREATE TABLE IF NOT EXISTS, so it will not add a column to an existing table;
+# these are applied with ALTER instead. Append-only, never reorder.
+_ADDED_COLUMNS: list[tuple[str, str, str]] = [
+    ("person", "external_id", "TEXT"),
+    ("person", "source_dataset", "TEXT"),
+]
+
+
 def migrate(conn: sqlite3.Connection) -> None:
-    """Apply schema.sql. It is written to be idempotent, so this doubles as
-    both create-from-scratch and a no-op on an existing database."""
+    """Apply schema.sql, then any additive column migrations. Idempotent: this
+    doubles as create-from-scratch and as a no-op on an existing database."""
     sql = resources.files("cadre").joinpath("schema.sql").read_text(encoding="utf-8")
     conn.executescript(sql)
+    for table, column, coltype in _ADDED_COLUMNS:
+        existing = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}
+        if column not in existing:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {coltype}")
     conn.commit()
 
 

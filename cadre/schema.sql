@@ -25,9 +25,14 @@ CREATE TABLE IF NOT EXISTS person (
     native_place  TEXT,          -- 籍贯, key disambiguator for common names
     ethnicity     TEXT,
     notes         TEXT,
+    external_id   TEXT,          -- id in the dataset this row was imported from
+    source_dataset TEXT,         -- e.g. "cped", "wikidata"
     created_at    TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at    TEXT
 );
+CREATE UNIQUE INDEX IF NOT EXISTS idx_person_external
+    ON person(source_dataset, external_id)
+    WHERE external_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_person_name ON person(name_zh);
 
 -- Watchlist tier drives significance scoring. 1 = Politburo and above,
