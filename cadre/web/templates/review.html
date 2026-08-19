@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Review · cadre-watch{% endblock %}
+{% block body %}
+<p class="meta">Signals whose name could not be pinned to exactly one person.
+Resolving these is how the watchlist grows.</p>
+
+{% for s in signals %}
+<div class="card guessed">
+  <div class="row">
+    <div>
+      <span class="kind">{{ labels.get(s.kind, s.kind) }}</span>
+      <div class="name">{{ s.raw_name }}</div>
+      {% if s.raw_position %}<div class="meta">{{ s.raw_position }}</div>{% endif %}
+    </div>
+    <div style="text-align:right">
+      <div class="meta {{ 'warn' if s.resolution == 'ambiguous' else '' }}">{{ s.resolution }}</div>
+      <div class="meta">{{ s.published_at or '' }}</div>
+    </div>
+  </div>
+  <blockquote>{{ s.quoted_span }}</blockquote>
+  <div class="gloss">{{ glosses.get(s.rule_id, s.rule_id) }}</div>
+  <div class="meta">
+    <a href="{{ s.url }}" target="_blank" rel="noopener">{{ s.doc_title or s.url }}</a>
+    · confidence {{ '%.2f'|format(s.confidence) }}
+  </div>
+
+  <div style="margin-top:.6rem">
+    {% for c in candidates.get(s.id, []) %}
+      <form class="inline" method="post" action="/review/{{ s.id }}/assign">
+        <input type="hidden" name="person_id" value="{{ c.person_id }}">
+        <button>{{ c.name_zh }} — {{ c.notes or 'no note' }} ({{ '%.2f'|format(c.score) }})</button>
+      </form>
+    {% endfor %}
+    {% if s.resolution == 'unknown_person' %}
+      <form class="inline" method="post" action="/review/{{ s.id }}/create-person">
+        <select name="tier">
+          <option value="4" selected>tier 4</option>
+          <option value="3">tier 3</option>
+          <option value="2">tier 2</option>
+          <option value="1">tier 1</option>
+        </select>
+        <button>Add {{ s.raw_name }} to watchlist</button>
+      </form>
+    {% endif %}
+  </div>
+</div>
+{% else %}
+<p class="empty">Review queue is empty.</p>
+{% endfor %}
+{% endblock %}

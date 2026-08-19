@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Runs · cadre-watch{% endblock %}
+{% block body %}
+<p class="meta">A source that returned nothing when it has returned links before
+is flagged <span class="warn">empty</span> — that usually means a site redesign
+broke the selectors, not that nothing happened.</p>
+
+<table>
+  <tr><th>Run</th><th>Started</th><th>Status</th><th>Sources</th></tr>
+  {% for r in runs %}
+  <tr>
+    <td>{{ r.id }}</td>
+    <td>{{ r.started_at }}</td>
+    <td class="{{ 'ok' if r.status == 'ok' else 'err' }}">{{ r.status }}</td>
+    <td>
+      {% for s in per_source.get(r.id, []) %}
+        <div class="meta">
+          <strong>{{ s.source_id }}</strong>
+          <span class="{{ 'ok' if s.status == 'ok' else 'warn' }}">{{ s.status }}</span>
+          seen {{ s.docs_seen }} · new {{ s.docs_new }}
+          {% if s.error %}<span class="err">{{ s.error }}</span>{% endif %}
+        </div>
+      {% endfor %}
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+{% endblock %}

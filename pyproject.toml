@@ -1,0 +1,32 @@
+[project]
+name = "cadre-watch"
+version = "0.1.0"
+description = "Daily monitor for CCP personnel transitions: purges, promotions, retirements."
+requires-python = ">=3.11"
+dependencies = [
+    "httpx>=0.27",
+    "selectolax>=0.3.21",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "jinja2>=3.1",
+    "python-multipart>=0.0.9",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+cadre = "cadre.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["cadre*"]
+
+[tool.setuptools.package-data]
+cadre = ["schema.sql", "web/templates/*.html"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

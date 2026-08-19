@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block body %}
+<div class="row" style="margin-bottom:1rem">
+  <div class="meta">
+    {% if boundary %}Last visit {{ boundary }}{% else %}First visit{% endif %}
+  </div>
+  <div class="meta">
+    <a href="/?show=new">unreviewed</a> ·
+    <a href="/?show=since">since last visit</a> ·
+    <a href="/?show=open">open</a> ·
+    <a href="/?show=all">everything</a>
+  </div>
+</div>
+
+{% for e in events %}
+<div class="card">
+  <div class="row">
+    <div>
+      <span class="kind">{{ labels.get(e.kind, e.kind) }}</span>
+      <div class="name">
+        {% if e.person_id %}
+          <a href="/person/{{ e.person_id }}">{{ e.name_zh }}</a>
+          {% if e.name_pinyin %}<span class="meta">{{ e.name_pinyin }}</span>{% endif %}
+          {% if e.tier %}<span class="meta">· tier {{ e.tier }}</span>{% endif %}
+        {% else %}
+          {{ e.raw_name or '(unidentified)' }}
+          <span class="meta warn">· not in database</span>
+        {% endif %}
+      </div>
+    </div>
+    <div style="text-align:right">
+      <div class="sig">{{ '%.3f'|format(e.significance) }}</div>
+      <div class="meta">{{ e.event_date or e.first_seen_at[:10] }}</div>
+    </div>
+  </div>
+
+  {% for ev in evidence.get(e.id, []) %}
+    <blockquote>{{ ev.quoted_span }}</blockquote>
+    <div class="gloss">{{ glosses.get(ev.rule_id, ev.rule_id) }}</div>
+    <div class="meta">
+      <a href="{{ ev.url }}" target="_blank" rel="noopener">{{ ev.source_id }} · source</a>
+      · rule <code>{{ ev.rule_id }}</code> · confidence {{ '%.2f'|format(ev.confidence) }}
+      {% if ev.raw_position %} · {{ ev.raw_position }}{% endif %}
+    </div>
+  {% endfor %}
+
+  <div style="margin-top:.6rem">
+    {% for state, label in [('confirmed','Confirm'), ('watching','Watch'), ('seen','Seen'), ('dismissed','Dismiss')] %}
+      <form class="inline" method="post" action="/event/{{ e.id }}/state">
+        <input type="hidden" name="state" value="{{ state }}">
+        <input type="hidden" name="back" value="/?show={{ show }}">
+        <button {% if e.review_state == state %}style="color:var(--fg);border-color:var(--muted)"{% endif %}>{{ label }}</button>
+      </form>
+    {% endfor %}
+    <span class="meta" style="margin-left:.5rem">
+      {{ e.n_signals }} source{{ '' if e.n_signals == 1 else 's' }} · state: {{ e.review_state }}
+    </span>
+  </div>
+</div>
+{% else %}
+<p class="empty">Nothing here. Run <code>cadre run</code> to fetch, or widen the filter above.</p>
+{% endfor %}
+{% endblock %}

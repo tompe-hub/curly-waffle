@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}{{ person.name_zh }} · cadre-watch{% endblock %}
+{% block body %}
+<h2 style="margin:0 0 .2rem">{{ person.name_zh }}
+  <span class="meta">{{ person.name_pinyin or '' }}</span></h2>
+<p class="meta">
+  {% if person.tier %}watchlist tier {{ person.tier }} · {% endif %}
+  {% if person.birth_year %}b. {{ person.birth_year }} · {% endif %}
+  {% if person.native_place %}{{ person.native_place }} · {% endif %}
+  {{ person.notes or '' }}
+</p>
+
+<h3>Events</h3>
+{% for e in events %}
+  <div class="card">
+    <div class="row">
+      <span class="kind">{{ labels.get(e.kind, e.kind) }}</span>
+      <span class="meta">{{ e.event_date or e.first_seen_at[:10] }} · {{ e.review_state }}</span>
+    </div>
+    <div class="meta">{{ e.summary or '' }}</div>
+  </div>
+{% else %}<p class="meta">No events recorded.</p>{% endfor %}
+
+<h3>Positions</h3>
+{% if spells %}
+<table>
+  <tr><th>Position</th><th>Organisation</th><th>From</th><th>To</th><th>Ended as</th></tr>
+  {% for s in spells %}
+  <tr>
+    <td>{{ s.title_zh }}</td><td>{{ s.org_name or '' }}</td>
+    <td>{{ s.start_date or '?' }}</td><td>{{ s.end_date or '—' }}</td>
+    <td>{{ s.end_type or '' }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}<p class="meta">No position history loaded. Career spells arrive with the CPED import.</p>{% endif %}
+
+<h3>Evidence</h3>
+{% for s in signals %}
+  <div class="card">
+    <div class="row">
+      <span class="kind">{{ labels.get(s.kind, s.kind) }}</span>
+      <span class="meta">{{ s.published_at or '' }} · {{ s.source_id }}</span>
+    </div>
+    <blockquote>{{ s.quoted_span }}</blockquote>
+    <div class="gloss">{{ glosses.get(s.rule_id, s.rule_id) }}</div>
+    <div class="meta">
+      <a href="{{ s.url }}" target="_blank" rel="noopener">{{ s.doc_title or s.url }}</a>
+      · rule <code>{{ s.rule_id }}</code> · confidence {{ '%.2f'|format(s.confidence) }}
+    </div>
+  </div>
+{% else %}<p class="meta">No signals yet.</p>{% endfor %}
+{% endblock %}
