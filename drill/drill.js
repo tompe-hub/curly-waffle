@@ -193,6 +193,16 @@
         'Write the verdict in English, one or two sentences, specific, no praise padding.\n\n'+
         'Reply with only this JSON:\n{"level":"B2+","scores":{"coverage":0,"accuracy":0,"range":0,"grammar":0},"verdict":"...","corrections":[{"said":"...","better":"...","why":"..."}],"upgrades":[{"plain":"...","c1":"...","pinyin":"..."}],"model":"..."}';
     }
+    /* sample.json where the runtime has it; otherwise plain text, parsed here the same tolerant way */
+    function askJSON(sample,prompt,opts){
+      if(typeof sample.json==='function') return sample.json(prompt,opts);
+      return sample(prompt,opts).then(function(r){
+        var t=dflt(r&&r.text), f=t.match(/```(?:json)?\s*([\s\S]*?)```/);
+        if(f) t=f[1];
+        var a=t.search(/[\[{]/), b=Math.max(t.lastIndexOf('}'),t.lastIndexOf(']'));
+        try{return JSON.parse(a>=0&&b>a?t.slice(a,b+1):t);}catch(e){throw {code:'invalid_json',message:'unparseable',text:t};}
+      });
+    }
     function valid(d){
       return d&&!d.error&&Array.isArray(d.paragraphs)&&d.paragraphs.length&&Array.isArray(d.questions)&&d.questions.length>=3&&
         d.questions.every(function(q){return q&&q.q&&Array.isArray(q.options)&&q.options.length>=2&&q.answer>=0&&q.answer<q.options.length;});
@@ -298,7 +308,7 @@
       box.querySelector('[data-a="stop"]').onclick=function(){if(ctl)ctl.abort();};
       sampleP.then(function(sample){
         if(!sample){failed({code:'not_granted'});return;}
-        return sample.json(genPrompt(),{signal:ctl.signal,cache:false,onText:function(){var st=box.querySelector('[data-el="st"]');if(st)st.textContent='Writing…';}})
+        return askJSON(sample,genPrompt(),{signal:ctl.signal,cache:false,onText:function(){var st=box.querySelector('[data-el="st"]');if(st)st.textContent='Writing…';}})
           .then(function(d){
             if(!valid(d)){failed({code:d&&d.error?'refused':'invalid_json'});return;}
             d.questions=d.questions.slice(0,4); d.terms=(d.terms||[]).slice(0,8); d.task=d.task||(S.trad?'請用一分鐘複述這段內容，並加一句你自己的看法。':'请用一分钟复述这段内容，并加一句你自己的看法。');
@@ -418,7 +428,7 @@
       box.querySelector('[data-a="stop"]').onclick=function(){if(ctl)ctl.abort();};
       sampleP.then(function(sample){
         if(!sample){failed({code:'not_granted'});return;}
-        return sample.json(gradePrompt(),{signal:ctl.signal,cache:false,onText:function(){var st=box.querySelector('[data-el="st"]');if(st)st.textContent='Writing the feedback…';}})
+        return askJSON(sample,gradePrompt(),{signal:ctl.signal,cache:false,onText:function(){var st=box.querySelector('[data-el="st"]');if(st)st.textContent='Writing the feedback…';}})
           .then(function(r){
             if(!r||!r.scores){failed({code:'invalid_json'});return;}
             S.result=r; finish();
