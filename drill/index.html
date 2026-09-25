@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mandarin drill</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Semi+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+/* The same tokens as "The week, on one page", so the drill looks identical standalone and inside the planner. */
+:root{
+  --paper:#F6F7F2; --panel:#FFFFFF; --ink:#1B2A27; --soft:#5D6B66; --line:#D9DED6;
+  --mandarin:#C2362B; --research:#2B4C8C; --food:#4E7D3A;
+  --head:"Barlow Semi Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){--paper:#101614; --panel:#18211E; --ink:#E6ECE8; --soft:#9DABA5; --line:#2B3632; --mandarin:#EE6A5E; --research:#7FA2E8; --food:#8CC474;}
+}
+:root[data-theme="dark"]{--paper:#101614; --panel:#18211E; --ink:#E6ECE8; --soft:#9DABA5; --line:#2B3632; --mandarin:#EE6A5E; --research:#7FA2E8; --food:#8CC474;}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--body);font-size:17px;line-height:1.45}
+main{max-width:640px;margin:0 auto;padding:20px 16px 60px}
+h1{font-family:var(--head);font-weight:700;font-size:2.1rem;line-height:1.05;margin:4px 0 4px}
+p{margin:0 0 12px}
+.lede{color:var(--soft);margin-bottom:18px}
+button{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--research);outline-offset:2px;border-radius:6px}
+.group{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:4px 14px 10px;margin:0 0 14px}
+.group h3{font-family:var(--head);font-weight:600;font-size:1.1rem;margin:12px 0 4px}
+.group h3 small{font-family:var(--body);font-weight:400;font-size:.85rem;color:var(--soft);margin-left:6px}
+.group .why{color:var(--soft);font-size:.92rem;margin:0 0 6px}
+.plain{background:transparent;border:1.5px solid var(--ink);border-radius:8px;padding:7px 12px;cursor:pointer;font-weight:500}
+</style>
+</head>
+<body>
+<main>
+  <h1>Mandarin drill</h1>
+  <p class="lede">Listen, answer, retell, get graded. Ten minutes, logged as a streak.</p>
+  <div id="drill"></div>
+</main>
+<script src="drill.js"></script>
+<script>
+(function(){
+  var store={
+    get:function(k,d){try{var v=localStorage.getItem(k);return v===null?d:JSON.parse(v);}catch(e){return d;}},
+    set:function(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
+  };
+  /* the planner's cloud adapter: one private document per day under data/users/<id>/ */
+  var cloud=(function(){
+    var db=null, uid=null;
+    var ready=(window.claude&&typeof window.claude.use==='function')
+      ? Promise.all([window.claude.use('db'),window.claude.use('user')]).then(function(r){
+          if(!r[0]||!r[1]) return null;
+          return r[1].id().then(function(id){if(!id) return null;db=r[0];uid=id;return db.collection('data/users/'+uid).get();});
+        }).then(function(snap){
+          if(!snap) return null;
+          return snap.docs.map(function(d){return JSON.parse(JSON.stringify(d.data()||null));}).filter(Boolean);
+        }).catch(function(){return null;})
+      : Promise.resolve(null);
+    function push(id,doc,done){
+      if(!db||!uid) return;
+      var out=JSON.parse(JSON.stringify(doc)); out.updated=new Date().toISOString();
+      db.doc('data/users/'+uid+'/'+id).set(out).then(function(){if(done)done(true);},function(){if(done)done(false);});
+    }
+    return {ready:ready,push:push};
+  })();
+  if(window.MandarinDrill) window.MandarinDrill.mount({host:document.getElementById('drill'),store:store,cloud:cloud});
+})();
+</script>
+</body>
+</html>
