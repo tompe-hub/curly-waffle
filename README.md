@@ -10,7 +10,7 @@ A ten-minute listening and speaking drill for the C1-by-June goal, built to run 
 4. **Retell.** About a minute, out loud. Browser speech recognition transcribes it where the browser allows; otherwise use keyboard dictation or type.
 5. **Grade.** Claude scores coverage, accuracy, C1 range and grammar out of 5, estimates a CEFR level, and returns corrections, C1 upgrades and a model retelling to shadow.
 
-Every run is logged as `{kind:'drill', key:'YYYY-MM-DD', runs:[…]}` under the viewer's private `data/users/<id>/d-<date>` documents. The streak counts consecutive days; weekends count when done and never break it. The week's key terms can be copied as tab-separated lines for Anki.
+Every run is logged as `{kind:'drill', key:'YYYY-MM-DD', runs:[…]}` under the viewer's private `data/users/<id>/d-<date>` documents. The streak counts consecutive days; weekends count when done and never break it. The week's key terms can be copied as tab-separated lines for Anki. The card also plots recent retelling scores against a C1 line (15 of 20) and names the area that has trailed over the last five graded runs; the grader is told about it. The planner's Score tab shows the month's drill days, runs, average score and latest level.
 
 - `drill/drill.js` is the module. `MandarinDrill.mount({host, store, cloud})` renders into `host`, and `cloud` is the planner's `{ready, push}` adapter.
 - `drill/index.html` is a standalone page with the same styling and adapter.
