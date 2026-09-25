@@ -67,7 +67,8 @@
     '.dr-terms{width:100%;border-collapse:collapse;font-size:.95rem;margin:6px 0}',
     '.dr-terms td{padding:6px 8px 6px 0;border-bottom:1px solid var(--line);vertical-align:top}',
     '.dr-terms td:first-child{white-space:nowrap}',
-    '.dr-err{color:var(--mandarin);font-size:.92rem;margin:8px 0}'
+    '.dr-err{color:var(--mandarin);font-size:.92rem;margin:8px 0}',
+    '.dr-trend{display:block;width:100%;height:56px;margin:10px 0 4px;border-bottom:1px solid var(--line)}'
   ].join('\n');
 
   function pad(n){return (n<10?'0':'')+n;}
@@ -113,6 +114,36 @@
       var from=ymd(mon), out=[];
       Object.keys(D.logs).sort().forEach(function(k){if(k>=from)(D.logs[k].runs||[]).forEach(function(r){out.push(r);});});
       return out;
+    }
+    function allRuns(){
+      var out=[];Object.keys(D.logs).sort().forEach(function(k){(D.logs[k].runs||[]).forEach(function(r){out.push({key:k,r:r});});});
+      return out;
+    }
+    var DIMS=['coverage','accuracy','C1 range','grammar'];
+    /* the dimension with the lowest average over the last five graded runs, if one clearly trails */
+    function weakest(){
+      var g=allRuns().filter(function(x){return x.r.dims&&x.r.dims.length===4;}).slice(-5);
+      if(g.length<3) return null;
+      var avg=[0,1,2,3].map(function(i){return g.reduce(function(a,x){return a+x.r.dims[i];},0)/g.length;});
+      var lo=Math.min.apply(null,avg), i=avg.indexOf(lo), rest=avg.filter(function(v,j){return j!==i;});
+      return lo<=Math.min.apply(null,rest)-0.5?{name:DIMS[i],avg:lo}:null;
+    }
+    function trendSVG(){
+      var g=allRuns().filter(function(x){return x.r.score!=null;}).slice(-14);
+      if(g.length<2) return '';
+      /* the scale starts just under the lowest score, so a two-point gain is visible */
+      var lo=Math.max(0,Math.min.apply(null,g.map(function(x){return x.r.score;}).concat([15]))-2), span=20-lo;
+      var w=280,hh=56,y=function(v){return hh-4-((v-lo)/span)*(hh-8);};
+      var pts=g.map(function(x,i){return [i/(g.length-1)*w, y(x.r.score)];}), c1=y(15);
+      return '<svg class="dr-trend" viewBox="0 0 '+w+' '+hh+'" preserveAspectRatio="none" role="img" aria-label="Retelling score over the last '+g.length+' graded drills, out of 20. The dashed line is 15, roughly C1.">'+
+        '<line x1="0" x2="'+w+'" y1="'+c1.toFixed(1)+'" y2="'+c1.toFixed(1)+'" stroke="var(--soft)" stroke-dasharray="3 4" vector-effect="non-scaling-stroke"/>'+
+        '<polyline points="'+pts.map(function(p){return p[0].toFixed(1)+','+p[1].toFixed(1);}).join(' ')+'" fill="none" stroke="var(--mandarin)" stroke-width="2" vector-effect="non-scaling-stroke"/></svg>'+
+        '<p class="dr-note">Retelling score out of 20, last '+g.length+' graded drills'+(g.length>5?', most recent five: ':': ')+g.slice(-5).map(function(x){return x.r.score;}).join(', ')+'. Dashed line: 15, about C1. Scale '+lo+' to 20.</p>';
+    }
+    function month(mKey){
+      var runs=allRuns().filter(function(x){return x.key.indexOf(mKey)===0;}), days={}, sc=[], lv='';
+      runs.forEach(function(x){days[x.key]=1;if(x.r.score!=null)sc.push(x.r.score);if(x.r.level)lv=x.r.level;});
+      return {runs:runs.length,days:Object.keys(days).length,graded:sc.length,avg:sc.length?Math.round(sc.reduce(function(a,b){return a+b;},0)/sc.length*10)/10:null,level:lv};
     }
     function recentTitles(){
       var t=[];Object.keys(D.logs).sort().reverse().slice(0,10).forEach(function(k){(D.logs[k].runs||[]).forEach(function(r){if(r.title)t.push(r.title);});});
@@ -190,6 +221,7 @@
         'It took them '+Math.round(S.speakSecs)+' seconds.\n\n'+
         'Score 0 to 5 on each: coverage (main points and structure retold), accuracy (nothing distorted or invented), range (C1 vocabulary and structures, not just words lifted from the passage), grammar (correct, natural sentences). Give an overall CEFR estimate from B1 to C2, allowing + and -.\n'+
         'Give up to 4 corrections of things they actually said: the original, a natural C1 version, and a short English reason. Give 3 upgrades: a plain phrase they used or could have used, a more precise C1 alternative, and its pinyin. Then write a model retelling of about 120 characters in the passage\'s script, with one sentence of view.\n'+
+        (S.weak?'Across their recent drills their weakest area is '+S.weak.name+'. Weight the corrections and upgrades towards it.\n':'')+
         'Write the verdict in English, one or two sentences, specific, no praise padding.\n\n'+
         'Reply with only this JSON:\n{"level":"B2+","scores":{"coverage":0,"accuracy":0,"range":0,"grammar":0},"verdict":"...","corrections":[{"said":"...","better":"...","why":"..."}],"upgrades":[{"plain":"...","c1":"...","pinyin":"..."}],"model":"..."}';
     }
@@ -224,7 +256,7 @@
         strip+='<i class="'+cls.join(' ')+'" title="'+k+'">'+'SMTWTFS'.charAt(wd)+'</i>';
         d.setDate(d.getDate()+1);
       }
-      var wr=weekRuns(), quiz=0, qn=0, lv=[];
+      var wr=weekRuns(), quiz=0, qn=0, lv=[], wk=weakest();
       wr.forEach(function(r){if(r.quiz){quiz+=r.quiz[0];qn+=r.quiz[1];} if(r.level) lv.push(r.level);});
       var todayRuns=(D.logs[today]&&D.logs[today].runs)||[];
       var out=outletFor();
@@ -235,6 +267,7 @@
         '<div class="dr-strip" aria-label="Last fourteen days">'+strip+'</div>'+
         '<div class="dr-key"><span>Filled: drilled</span><span>Dotted: weekend, never breaks the streak</span><span>Dashed: today</span></div>'+
         (wr.length?'<p class="dr-note">This week: '+wr.length+(wr.length===1?' drill':' drills')+(qn?', '+quiz+' of '+qn+' questions right':'')+(lv.length?', last level '+escH(lv[lv.length-1]):'')+'.</p>':'')+
+        trendSVG()+(wk?'<p class="dr-note"><b>Weakest lately: '+wk.name+'</b>, '+wk.avg.toFixed(1)+' of 5. The grader is told, and pushes on it.</p>':'')+
         '<div class="dr-row"><button type="button" class="plain go" data-a="start">'+(todayRuns.length?'Another drill':'Start today’s drill')+'</button>'+
         (termsThisWeek().length?'<button type="button" class="plain" data-a="terms">This week’s terms</button>':'')+'</div>'+
         '<p class="dr-note dr-sync">'+(synced?'Saved to your account.':'Saved on this device.')+'</p>'
@@ -372,7 +405,7 @@
     }
 
     function speakScreen(){
-      S.answer=S.answer||''; S.spoken=false; S.speakSecs=0;
+      S.answer=S.answer||''; S.spoken=false; S.speakSecs=0; S.weak=weakest();
       var box=h('<h3>3. Retell it<small class="dr-clock">'+clock()+'</small></h3>'+
         '<p class="dr-zh" lang="'+lang()+'">'+escH(S.data.task)+'</p>'+
         '<p class="why">About a minute, out loud, without looking at the text. Use the words you heard, then one sentence of your own view.</p>'+
@@ -448,7 +481,7 @@
       var run={
         t:new Date().toISOString(), topic:S.topic[1], title:dflt(S.data.title).slice(0,60), source:S.source, script:S.trad?'trad':'simp',
         plays:S.plays, peeked:S.peeked, quiz:[right,S.data.questions.length], spoken:!!S.spoken,
-        level:r?dflt(r.level).slice(0,4):'', score:sc?sc.reduce(function(a,b){return a+b;},0):null,
+        level:r?dflt(r.level).slice(0,4):'', score:sc?sc.reduce(function(a,b){return a+b;},0):null, dims:sc,
         secs:Math.round((Date.now()-S.started)/1000),
         terms:(S.data.terms||[]).map(function(x){return [dflt(x.term),dflt(x.pinyin),dflt(x.gloss)];})
       };
@@ -503,7 +536,7 @@
     });
 
     home();
-    return {render:function(){if(!S)home();},streak:function(){return streakOf(doneDays());}};
+    return {render:function(){if(!S)home();},streak:function(){return streakOf(doneDays());},month:month};
   }
 
   window.MandarinDrill={mount:mount,streakOf:streakOf};
